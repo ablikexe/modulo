@@ -1,22 +1,28 @@
 <template>
   <div>
     <div>
-      Current modulo: {{ modulo }}.
-      <button v-if="modulo > 1" @click="changeModulo(-1)">-1</button>
-      <button @click="changeModulo(1)">+1</button>
+      Current modulo: <b>{{ modulo }}</b>.<br>
+      Factorization: {{ factorize(modulo).join('*') }}.<br>
+      &phi;(n) = {{ phi(modulo) }}.<br>
+      Browse all modulos:
+      <button :disabled="modulo <= 1" @click="changeModulo(-1)">-1</button>
+      <button @click="changeModulo(1)">+1</button><br>
+      Browse interesting modulos:
+      <button :disabled="modulo <= 6" @click="findInterestingModulo(-1)">prev</button>
+      <button @click="findInterestingModulo(1)">next</button>
     </div>
     <div class="table-wrapper">
       <table>
         <th></th>
         <!-- Keys workaround from https://github.com/vuejs/vue/issues/7323 -->
-        <th v-for="rowValue in row" :key="'col' + rowValue">{{ rowValue }}</th>
-        <tr v-for="(rowValue) in row" :key="'row' + rowValue" v-bind:class="highlightRow(rowValue)">
-          <th>{{ rowValue }}</th>
+        <th v-for="col in cols" :key="'header' + col">{{ col }}</th>
+        <tr v-for="row in rows" :key="'row' + row" v-bind:class="highlightRow(row)">
+          <th>{{ row }}</th>
           <td
-            v-bind:class="highlight(rowValue, columnValue)"
-            v-for="(columnValue) in row"
-            :key="columnValue"
-          >{{getValue(rowValue, columnValue)}}</td>
+            v-bind:class="highlight(row, col)"
+            v-for="col in cols"
+            :key="'row' + row + '-col' + col"
+          >{{getValue(row, col)}}</td>
         </tr>
       </table>
     </div>
@@ -24,12 +30,12 @@
 </template>
 
 <script>
+const INITIAL_MODULO = 35, MIN_COLS = 30, MIN_ROWS = 30, ELLIPSIS = '...';
 export default {
   name: "ModuloTable",
   methods: {
     getValue(x, y) {
-      // return (x * y) % this.modulo;
-      // return x ** y % this.modulo;
+      if (y === ELLIPSIS) return '...';
 
       // Calculate x ** y manually, with a loop.
       // This way we can take the result modulo this.modulo after each multiplication
@@ -42,7 +48,8 @@ export default {
     highlight(x, y) {
       return {
         active: this.getValue(x, y) === 1,
-        zero: this.getValue(x, y) === 0
+        zero: this.getValue(x, y) === 0,
+        crucial: y%this.phi(this.modulo) === 1,
       };
     },
     highlightRow(x) {
@@ -60,14 +67,57 @@ export default {
       }
       return arr;
     },
+    refreshTable() {
+      this.rows = this.getRows(this.modulo);
+      this.cols = this.getCols(this.modulo);
+    },
     changeModulo(diff) {
       this.modulo += diff;
+      this.refreshTable();
+    },
+    twoDifferentValues(arr) {
+      return arr.length === 2 && arr[0] !== arr[1];
+    },
+    findInterestingModulo(diff) {
+      do {
+        this.modulo += diff;
+      } while (!this.twoDifferentValues(this.factorize(this.modulo)));
+      this.refreshTable();
+    },
+    factorize(n) {
+      let primeFactors = [];
+      for (let i=2; i<=n; i++) {
+        while (n%i === 0) {
+          primeFactors.push(i);
+          n /= i;
+        }
+      }
+      return primeFactors;
+    },
+    phi(n) {
+      let factors = this.factorize(n);
+      let last = null;
+      let res = 1;
+      for (let x of factors) {
+        res *= (x === last ? x : x-1);
+        last = x;
+      }
+      return res;
+    },
+    getRows(n) {
+      return this.getArray(Math.max(n, MIN_ROWS));
+    },
+    getCols(n) {
+      let p = this.phi(n);
+      if (p <= MIN_COLS+1) return this.getArray(Math.max(p+1, MIN_COLS));
+      else return [...this.getArray(MIN_COLS), ELLIPSIS, p, p+1];
     }
   },
   data: function() {
     return {
-      modulo: 25,
-      row: this.getArray(30)
+      modulo: INITIAL_MODULO,
+      rows: this.getRows(INITIAL_MODULO),
+      cols: this.getCols(INITIAL_MODULO),
     };
   }
 };
@@ -79,6 +129,9 @@ export default {
 }
 .zero {
   background-color: red;
+}
+.crucial {
+  background-color: #af6;
 }
 .coprime {
   opacity: 0.8;
